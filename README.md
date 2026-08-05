@@ -1,18 +1,10 @@
 # Vipere 
 
-
 special thanks to [Sans23](https://github.com/requin-citron)
-
-
----
 
 ## Demo
 
-
-
 https://github.com/user-attachments/assets/5db7d617-1717-4ca2-ab5f-2149c36e9a39
-
-
 
 ## What is this?
 
