@@ -1,5 +1,9 @@
 # Vipere 
 
+
+special thanks to [Sans23](https://github.com/requin-citron)
+
+
 ---
 
 ## Demo
